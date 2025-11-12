@@ -22705,6 +22705,15 @@ async function getClient() {
   const API_TOKEN = process.env.GITHUB_TOKEN ?? "";
   return import_github.default.getOctokit(API_TOKEN);
 }
+async function getGitRef(ghIssueNumber) {
+  const octokit = await getClient();
+  const pull = await octokit.rest.pulls.get({
+    owner: import_github.context.repo.owner,
+    repo: import_github.context.repo.repo,
+    pull_number: ghIssueNumber
+  });
+  return pull.data.head.ref;
+}
 async function getDeployment(ref) {
   const octokit = await getClient();
   const deployments = await octokit.rest.repos.listDeployments({
@@ -22776,16 +22785,16 @@ async function findLinearIdentifierInComment(ghIssueNumber) {
 
 // src/index.ts
 async function main() {
-  import_core.info(JSON.stringify(import_github2.context));
-  const gitRef = import_github2.context.ref;
-  if (!gitRef) {
-    import_core.error("No git ref found");
-    throw new Error("No git ref found");
-  }
   const ghIssueNumber = import_github2.context.issue.number;
+  const gitRef = await getGitRef(ghIssueNumber);
   const previewData = await getPreviewData(gitRef);
   const linearIdentifier = await findLinearIdentifierInComment(ghIssueNumber);
   import_core.info(JSON.stringify(previewData));
   import_core.info(JSON.stringify(linearIdentifier));
+  const title = import_github2.context.payload.issue?.title;
+  import_core.info(title);
 }
 main();
+
+//# debugId=91F816E081B1507164756E2164756E21
+//# sourceMappingURL=index.js.map
