@@ -6,7 +6,7 @@ import {
     getDeploymentData,
     getGitSha,
 } from './github';
-// import { getLinearIssueId, setAttachment } from './linear';
+import { getLinearIssueId, setAttachment } from './linear';
 
 async function main() {
     debug(`Starting with context: ${JSON.stringify(context, null, 2)}`);
@@ -27,29 +27,19 @@ async function main() {
 
     info(JSON.stringify(deploymentData));
     info(JSON.stringify(linearIdentifier));
-    // const issue = await getLinearIssueId(linearIdentifier);
+    const issue = await getLinearIssueId(linearIdentifier);
 
     const title = context.payload.issue?.title;
 
-    info(`Done running for PR title: ${title}`);
-    info(
-        `would add attachment with data: ${JSON.stringify({
-            // issueId: 'issue.id',
-            url: deploymentData.url,
-            title: `Preview of PR #${ghIssueNumber}`,
-            subtitle: title,
-            avatar: deploymentData.avatar,
-        })}`,
-    );
-
-    // TODO: Can we get the PR title from context?
-    // await setAttachment({
-    //     issueId: issue.id,
-    //     url: previewData.url,
-    //     title: `Preview of PR #${ghIssueNumber}`,
-    //     subtitle: '',
-    //     avatar: previewData.avatar,
-    // });
+    const attachment = await setAttachment({
+        issueId: issue.id,
+        url: deploymentData.url,
+        title: `Preview of PR #${ghIssueNumber}`,
+        subtitle: title,
+        avatar: deploymentData.avatar,
+    });
+    info(`Added attachment: ${JSON.stringify(attachment)}`);
+    info('Done running');
 }
 
 main();
