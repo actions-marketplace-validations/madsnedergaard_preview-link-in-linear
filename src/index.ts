@@ -1,14 +1,15 @@
 import { context } from '@actions/github';
-import { info } from '@actions/core';
+import { debug, info } from '@actions/core';
 
 import {
     findLinearIdentifierInComment,
-    getGitRef,
     getDeploymentData,
+    getGitSha,
 } from './github';
 // import { getLinearIssueId, setAttachment } from './linear';
 
 async function main() {
+    debug(`Starting with context: ${JSON.stringify(context, null, 2)}`);
     // Only run if the comment is on a pull request
     if (!context.payload.issue?.pull_request) {
         info('Skipping: comment is not on a pull request');
@@ -17,8 +18,8 @@ async function main() {
 
     const ghIssueNumber = context.issue.number;
 
-    const gitRef = await getGitRef(ghIssueNumber);
-    const deploymentData = await getDeploymentData(gitRef);
+    const gitSha = await getGitSha(ghIssueNumber);
+    const deploymentData = await getDeploymentData(gitSha);
 
     // TODO: Could we potentially get the linear identifier from context of the comment instead?
     // But maybe we want to actually have both, in case a preview provider adds a comment to the PR about a new deployment being available.
@@ -30,7 +31,16 @@ async function main() {
 
     const title = context.payload.issue?.title;
 
-    info(title);
+    info(`Done running for PR title: ${title}`);
+    info(
+        `would add attachment with data: ${JSON.stringify({
+            // issueId: 'issue.id',
+            url: deploymentData.url,
+            title: `Preview of PR #${ghIssueNumber}`,
+            subtitle: title,
+            avatar: deploymentData.avatar,
+        })}`,
+    );
 
     // TODO: Can we get the PR title from context?
     // await setAttachment({

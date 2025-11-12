@@ -6,7 +6,7 @@ async function getClient() {
     return getOctokit(API_TOKEN);
 }
 
-export async function getGitRef(ghIssueNumber: number) {
+export async function getGitSha(ghIssueNumber: number) {
     debug(`Getting git ref for issue number: ${ghIssueNumber}`);
     const octokit = await getClient();
     const pull = await octokit.rest.pulls.get({
@@ -15,12 +15,12 @@ export async function getGitRef(ghIssueNumber: number) {
         pull_number: ghIssueNumber,
     });
     debug(`Pull data: ${JSON.stringify(pull.data)}`);
-    return pull.data.head.ref;
+    return pull.data.head.sha;
 }
 
 export async function getDeployment(ref: string) {
     const octokit = await getClient();
-    debug(`Getting deployment for ref: ${ref}`);
+    debug(`Getting deployment for ref (SHA): ${ref}`);
     const deployments = await octokit.rest.repos.listDeployments({
         owner: context.repo.owner,
         repo: context.repo.repo,

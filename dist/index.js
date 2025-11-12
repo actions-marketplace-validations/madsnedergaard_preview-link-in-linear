@@ -31701,7 +31701,7 @@ async function getClient() {
     const API_TOKEN = (0,core.getInput)('GITHUB_TOKEN', { required: true });
     return (0,github.getOctokit)(API_TOKEN);
 }
-async function getGitRef(ghIssueNumber) {
+async function getGitSha(ghIssueNumber) {
     (0,core.debug)(`Getting git ref for issue number: ${ghIssueNumber}`);
     const octokit = await getClient();
     const pull = await octokit.rest.pulls.get({
@@ -31710,11 +31710,11 @@ async function getGitRef(ghIssueNumber) {
         pull_number: ghIssueNumber,
     });
     (0,core.debug)(`Pull data: ${JSON.stringify(pull.data)}`);
-    return pull.data.head.ref;
+    return pull.data.head.sha;
 }
 async function getDeployment(ref) {
     const octokit = await getClient();
-    (0,core.debug)(`Getting deployment for ref: ${ref}`);
+    (0,core.debug)(`Getting deployment for ref (SHA): ${ref}`);
     const deployments = await octokit.rest.repos.listDeployments({
         owner: github.context.repo.owner,
         repo: github.context.repo.repo,
@@ -31794,14 +31794,15 @@ async function findLinearIdentifierInComment(ghIssueNumber) {
 
 // import { getLinearIssueId, setAttachment } from './linear';
 async function main() {
+    (0,core.debug)(`Starting with context: ${JSON.stringify(github.context, null, 2)}`);
     // Only run if the comment is on a pull request
     if (!github.context.payload.issue?.pull_request) {
         (0,core.info)('Skipping: comment is not on a pull request');
         return;
     }
     const ghIssueNumber = github.context.issue.number;
-    const gitRef = await getGitRef(ghIssueNumber);
-    const deploymentData = await getDeploymentData(gitRef);
+    const gitSha = await getGitSha(ghIssueNumber);
+    const deploymentData = await getDeploymentData(gitSha);
     // TODO: Could we potentially get the linear identifier from context of the comment instead?
     // But maybe we want to actually have both, in case a preview provider adds a comment to the PR about a new deployment being available.
     const linearIdentifier = await findLinearIdentifierInComment(ghIssueNumber);
@@ -31809,7 +31810,14 @@ async function main() {
     (0,core.info)(JSON.stringify(linearIdentifier));
     // const issue = await getLinearIssueId(linearIdentifier);
     const title = github.context.payload.issue?.title;
-    (0,core.info)(title);
+    (0,core.info)(`Done running for PR title: ${title}`);
+    (0,core.info)(`would add attachment with data: ${JSON.stringify({
+        // issueId: 'issue.id',
+        url: deploymentData.url,
+        title: `Preview of PR #${ghIssueNumber}`,
+        subtitle: title,
+        avatar: deploymentData.avatar,
+    })}`);
     // TODO: Can we get the PR title from context?
     // await setAttachment({
     //     issueId: issue.id,
