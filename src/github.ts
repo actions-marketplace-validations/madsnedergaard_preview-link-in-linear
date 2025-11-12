@@ -1,8 +1,9 @@
-import github, { context } from '@actions/github';
+import { getOctokit, context } from '@actions/github';
+import { getInput } from '@actions/core';
 
 async function getClient() {
-    const API_TOKEN = process.env.GITHUB_TOKEN ?? '';
-    return github.getOctokit(API_TOKEN);
+    const API_TOKEN = getInput('GITHUB_TOKEN', { required: true });
+    return getOctokit(API_TOKEN);
 }
 
 export async function getGitRef(ghIssueNumber: number) {
