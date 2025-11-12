@@ -31817,15 +31817,16 @@ async function findLinearIdentifierInComment(ghIssueNumber) {
 var index_cjs_min = __nccwpck_require__(1610);
 ;// CONCATENATED MODULE: ./src/linear.ts
 
+
 // Api key authentication
 const client = new index_cjs_min/* LinearClient */.hzE({
-    apiKey: process.env.LINEAR_API_KEY,
+    apiKey: (0,core.getInput)('LINEAR_API_KEY', { required: true }),
 });
 async function getLinearIssueId(issueId) {
     const issue = await client.issue(issueId);
     return issue;
 }
-async function setAttachment({ issueId, url, title, subtitle, avatar }) {
+async function setAttachment({ issueId, url, title, subtitle, avatar, }) {
     const result = await client.createAttachment({
         issueId,
         title,

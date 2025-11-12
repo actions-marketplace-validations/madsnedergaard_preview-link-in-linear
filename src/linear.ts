@@ -1,8 +1,9 @@
 import { LinearClient } from '@linear/sdk';
+import { getInput, debug } from '@actions/core';
 
 // Api key authentication
 const client = new LinearClient({
-    apiKey: process.env.LINEAR_API_KEY,
+    apiKey: getInput('LINEAR_API_KEY', { required: true }),
 });
 
 export async function getLinearIssueId(issueId: string) {
@@ -17,7 +18,13 @@ type AttachmentData = {
     url: string;
     avatar: string | undefined;
 };
-export async function setAttachment({ issueId, url, title, subtitle, avatar }: AttachmentData) {
+export async function setAttachment({
+    issueId,
+    url,
+    title,
+    subtitle,
+    avatar,
+}: AttachmentData) {
     const result = await client.createAttachment({
         issueId,
         title,
