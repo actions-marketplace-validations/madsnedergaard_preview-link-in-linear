@@ -1,20 +1,30 @@
 {
     "name": "preview-in-linear-action",
+    "description": "Make it easy to access your previews in Linear with this GitHub Action.",
+    "author": "Mads Nedergaard <github@madsnedergaard.dk>",
+    "license": "MIT",
+    "keywords": [
+        "github",
+        "action",
+        "linear",
+        "preview"
+    ],
     "module": "src/index.ts",
+    "version": "0.0.1",
     "type": "module",
     "private": true,
     "scripts": {
-        "build": "bun build src/index.ts --outdir dist --minify --target node --sourcemap",
+        "build": "ncc build src/index.ts",
         "dev": "bun run src/index.ts"
     },
     "devDependencies": {
-        "@types/bun": "latest"
-    },
-    "peerDependencies": {
+        "@types/bun": "latest",
         "typescript": "^5"
     },
     "dependencies": {
+        "@actions/core": "^1.11.1",
         "@actions/github": "^6.0.1",
-        "@linear/sdk": "^63.3.0"
+        "@linear/sdk": "^63.3.0",
+        "@vercel/ncc": "^0.38.4"
     }
 }
