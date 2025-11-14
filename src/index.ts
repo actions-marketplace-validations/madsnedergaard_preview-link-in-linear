@@ -12,6 +12,8 @@ async function main() {
         throw new Error(`Unsupported provider: ${provider}`);
     }
 
+    info(`Finding preview link from provider: ${provider}`);
+
     // Only run if the comment is on a pull request
     if (!context.payload.issue?.pull_request) {
         info('Skipping: comment is not on a pull request');

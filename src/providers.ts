@@ -1,3 +1,4 @@
+import { info } from '@actions/core';
 import { getGitHubDeploymentData } from './github';
 
 const providers = {
@@ -37,7 +38,7 @@ export async function getPreviewDataFromComments(comments: any[], provider: keyo
     for (const comment of comments) {
         if (comment.user?.login === providers[provider].author) {
             const link = comment.body?.match(new RegExp(providers[provider].urlPattern))?.[1];
-
+            info(`Found ${provider} preview link: ${link}`);
             if (link) {
                 return { url: link, avatar: comment.user?.avatar_url };
             } else {
