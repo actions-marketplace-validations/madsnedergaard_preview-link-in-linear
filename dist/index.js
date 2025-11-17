@@ -31752,16 +31752,21 @@ async function getDeployment(ref) {
     const deployment = deployments.data[0];
     if (!deployment) {
         console.error('No deployment found for the ref');
-        throw new Error('No deployment found for the ref');
+        return null;
     }
     if (deployments.data.length > 1) {
         console.error('Multiple deployments found for the same ref');
-        throw new Error('Multiple deployments found for the same ref');
+        return null;
     }
     return deployment;
 }
-async function getDeploymentData(ref) {
-    const deployment = await getDeployment(ref);
+async function getGitHubDeploymentData(ghIssueNumber) {
+    const gitSha = await getGitSha(ghIssueNumber);
+    const deployment = await getDeployment(gitSha);
+    if (!deployment) {
+        console.error('No deployment found for the ref');
+        return null;
+    }
     const deploymentId = deployment.id;
     const octokit = await getClient();
     const statuses = await octokit.rest.repos.listDeploymentStatuses({
@@ -31772,45 +31777,46 @@ async function getDeploymentData(ref) {
     const status = statuses.data[0];
     if (!status) {
         console.error('No deployment status found for the deployment');
-        throw new Error('No deployment status found for the deployment');
+        return null;
     }
     if (status.state !== 'success') {
         console.error('Deployment status is not success');
-        throw new Error('Deployment status is not success');
+        return null;
     }
     if (!status.environment_url) {
         console.error('No environment URL found for the deployment');
-        throw new Error('No environment URL found for the deployment');
+        return null;
     }
     return { url: status.environment_url, avatar: status.creator?.avatar_url };
 }
-async function findLinearIdentifierInComment(ghIssueNumber) {
-    // Find the relevant Linear issue comment inside the pull request from the bot
+async function getComments(ghIssueNumber) {
     const octokit = await getClient();
     const comments = await octokit.rest.issues.listComments({
         owner: github.context.repo.owner,
         repo: github.context.repo.repo,
         issue_number: ghIssueNumber,
     });
-    for (const comment of comments.data) {
+    return comments.data;
+}
+async function findLinearIdentifierInComment(comments) {
+    // Find the relevant Linear issue comment inside the pull request from the bot
+    for (const comment of comments) {
         if (comment.user?.login === 'linear[bot]') {
             // Body example: <p><a href=\"https://linear.app/preview-test/issue/PRE-7/add-functionality-for-detecting-a-linear-identifier\">PRE-7 Add functionality for detecting a Linear identifier</a></p>
             const link = comment.body?.match(/https:\/\/linear\.app\/[^"]+/)?.[0];
             if (link) {
-                const parts = link
-                    .replace('https://linear.app/', '')
-                    .split('/');
+                const parts = link.replace('https://linear.app/', '').split('/');
                 const [_team, _, identifier, _title] = parts;
                 return identifier;
             }
             else {
                 console.error('No link found in the comment');
-                throw new Error('No link found in the comment');
+                return null;
             }
         }
     }
     console.error('No linear identifier found in the comment');
-    throw new Error('No linear identifier found in the comment');
+    return null;
 }
 
 // EXTERNAL MODULE: ./node_modules/@linear/sdk/dist/index-cjs.min.js
@@ -31826,7 +31832,7 @@ async function getLinearIssueId(issueId) {
     const issue = await client.issue(issueId);
     return issue;
 }
-async function setAttachment({ issueId, url, title, subtitle, avatar, }) {
+async function setAttachment({ issueId, url, title, subtitle, avatar }) {
     const result = await client.createAttachment({
         issueId,
         title,
@@ -31851,34 +31857,94 @@ async function setAttachment({ issueId, url, title, subtitle, avatar, }) {
     }
 }
 
+;// CONCATENATED MODULE: ./src/providers.ts
+
+
+const providers = {
+    netlify: {
+        author: 'netlify[bot]',
+        urlPattern: 'Deploy Preview.*?\\]\\((https://[^)]+\\.netlify\\.app)\\)',
+    },
+    cloudflare: {
+        author: 'cloudflare-workers-and-pages[bot]',
+        urlPattern: "Branch Preview URL[\\s\\S]*?href='(https://[^']+\\.pages\\.dev)'",
+    },
+    vercel: {
+        author: 'vercel[bot]',
+        urlPattern: '\\[Preview\\]\\((https://[^)]+\\.vercel\\.app)\\)',
+    },
+};
+const supportedProviders = ['vercel', 'netlify', 'cloudflare', 'github-deployments'];
+async function getPreviewDataByProvider(provider, ghIssueNumber, comments) {
+    if (provider === 'github-deployments' || provider === 'vercel') {
+        return await getGitHubDeploymentData(ghIssueNumber);
+    }
+    if (provider === 'netlify') {
+        return await getPreviewDataFromComments(comments, provider);
+    }
+    if (provider === 'cloudflare') {
+        return await getPreviewDataFromComments(comments, provider);
+    }
+    return null;
+}
+async function getPreviewDataFromComments(comments, provider) {
+    for (const comment of comments) {
+        if (comment.user?.login === providers[provider].author) {
+            const link = comment.body?.match(new RegExp(providers[provider].urlPattern))?.[1];
+            (0,core.info)(`Found ${provider} preview link: ${link}`);
+            if (link) {
+                return { url: link, avatar: comment.user?.avatar_url };
+            }
+            else {
+                console.error(`No ${provider} link found in the comment`);
+                return null;
+            }
+        }
+    }
+    console.error(`No ${provider} link found in the comments`);
+    return null;
+}
+
 ;// CONCATENATED MODULE: ./src/index.ts
+
 
 
 
 
 async function main() {
     (0,core.debug)(`Starting with context: ${JSON.stringify(github.context, null, 2)}`);
+    const provider = (0,core.getInput)('provider', { required: true });
+    if (!supportedProviders.includes(provider)) {
+        throw new Error(`Unsupported provider: ${provider}`);
+    }
+    (0,core.info)(`Finding preview link from provider: ${provider}`);
     // Only run if the comment is on a pull request
     if (!github.context.payload.issue?.pull_request) {
         (0,core.info)('Skipping: comment is not on a pull request');
         return;
     }
     const ghIssueNumber = github.context.issue.number;
-    const gitSha = await getGitSha(ghIssueNumber);
-    const deploymentData = await getDeploymentData(gitSha);
-    // TODO: Could we potentially get the linear identifier from context of the comment instead?
-    // But maybe we want to actually have both, in case a preview provider adds a comment to the PR about a new deployment being available.
-    const linearIdentifier = await findLinearIdentifierInComment(ghIssueNumber);
-    (0,core.info)(JSON.stringify(deploymentData));
+    const comments = await getComments(ghIssueNumber);
+    const linearIdentifier = await findLinearIdentifierInComment(comments);
+    if (!linearIdentifier) {
+        (0,core.info)('Skipping: linear identifier not found');
+        return;
+    }
+    const previewData = await getPreviewDataByProvider(provider, ghIssueNumber, comments);
+    if (!previewData) {
+        (0,core.info)('Skipping: preview data not found');
+        return;
+    }
+    (0,core.info)(JSON.stringify(previewData));
     (0,core.info)(JSON.stringify(linearIdentifier));
     const issue = await getLinearIssueId(linearIdentifier);
     const title = github.context.payload.issue?.title;
     const attachment = await setAttachment({
         issueId: issue.id,
-        url: deploymentData.url,
+        url: previewData.url,
         title: `Preview of PR #${ghIssueNumber}`,
         subtitle: title,
-        avatar: deploymentData.avatar,
+        avatar: previewData.avatar,
     });
     (0,core.info)(`Added attachment: ${JSON.stringify(attachment)}`);
     (0,core.info)('Done running');
