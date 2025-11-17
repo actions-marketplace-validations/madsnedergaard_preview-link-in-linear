@@ -16,14 +16,14 @@ const providers = {
     },
 };
 
-export const supportedProviders = ['vercel', 'netlify', 'cloudflare', 'github-deployments'] as const;
+export const supportedProviders = ['vercel', 'netlify', 'cloudflare', 'github-deployments', 'fly'] as const;
 
 export async function getPreviewDataByProvider(
     provider: (typeof supportedProviders)[number],
     ghIssueNumber: number,
     comments: any[],
 ): Promise<{ url: string; avatar: string | undefined } | null> {
-    if (provider === 'github-deployments' || provider === 'vercel') {
+    if (['github-deployments', 'vercel', 'fly'].includes(provider)) {
         return await getGitHubDeploymentData(ghIssueNumber);
     }
     if (provider === 'netlify') {

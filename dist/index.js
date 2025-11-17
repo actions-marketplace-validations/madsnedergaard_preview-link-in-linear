@@ -31874,9 +31874,9 @@ const providers = {
         urlPattern: '\\[Preview\\]\\((https://[^)]+\\.vercel\\.app)\\)',
     },
 };
-const supportedProviders = ['vercel', 'netlify', 'cloudflare', 'github-deployments'];
+const supportedProviders = ['vercel', 'netlify', 'cloudflare', 'github-deployments', 'fly'];
 async function getPreviewDataByProvider(provider, ghIssueNumber, comments) {
-    if (provider === 'github-deployments' || provider === 'vercel') {
+    if (['github-deployments', 'vercel', 'fly'].includes(provider)) {
         return await getGitHubDeploymentData(ghIssueNumber);
     }
     if (provider === 'netlify') {
