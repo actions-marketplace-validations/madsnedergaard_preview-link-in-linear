@@ -31722,12 +31722,41 @@ var core = __nccwpck_require__(7484);
 ;// CONCATENATED MODULE: ./src/github.ts
 
 
+function getPullRequestInfoFromEvent() {
+    // Handle different event types
+    if (github.context.eventName === 'issue_comment') {
+        // Only run if the comment is on a pull request (ignore issue comments)
+        if (!github.context.payload.issue?.pull_request) {
+            (0,core.info)('Skipping: comment is not on a pull request');
+            return null;
+        }
+        return {
+            ghIssueNumber: github.context.issue.number,
+            title: github.context.payload.issue?.title,
+        };
+    }
+    else if (github.context.eventName === 'deployment_status') {
+        // Extract PR number from deployment payload
+        const pullRequests = github.context.payload.deployment?.pull_requests;
+        if (!pullRequests || pullRequests.length === 0) {
+            (0,core.info)('Skipping: deployment is not associated with a pull request');
+            return null;
+        }
+        return {
+            ghIssueNumber: pullRequests[0].number,
+            title: undefined, // Title will be fetched later if needed
+        };
+    }
+    else {
+        (0,core.info)(`Skipping: unsupported event type ${github.context.eventName}`);
+        return null;
+    }
+}
 async function getClient() {
     const API_TOKEN = (0,core.getInput)('GITHUB_TOKEN', { required: true });
     return (0,github.getOctokit)(API_TOKEN);
 }
-async function getGitSha(ghIssueNumber) {
-    (0,core.debug)(`Getting git ref for issue number: ${ghIssueNumber}`);
+async function getPullRequest(ghIssueNumber) {
     const octokit = await getClient();
     const pull = await octokit.rest.pulls.get({
         owner: github.context.repo.owner,
@@ -31735,7 +31764,12 @@ async function getGitSha(ghIssueNumber) {
         pull_number: ghIssueNumber,
     });
     (0,core.debug)(`Pull data: ${JSON.stringify(pull.data)}`);
-    return pull.data.head.sha;
+    return pull.data;
+}
+async function getGitSha(ghIssueNumber) {
+    (0,core.debug)(`Getting git ref for issue number: ${ghIssueNumber}`);
+    const pull = await getPullRequest(ghIssueNumber);
+    return pull.head.sha;
 }
 async function getDeployment(ref) {
     const octokit = await getClient();
@@ -31935,14 +31969,12 @@ async function getPreviewDataFromComments(comments, provider) {
 
 async function main() {
     (0,core.debug)(`Starting with context: ${JSON.stringify(github.context, null, 2)}`);
-    // Only run if the comment is on a pull request
-    if (!github.context.payload.issue?.pull_request) {
-        // TODO: What about listening on deployment_status then? Can we expand this check to be
-        // "if on:issue_comment" + "no payload.pull_request"?
-        (0,core.info)('Skipping: comment is not on a pull request');
+    const prInfo = getPullRequestInfoFromEvent();
+    if (!prInfo) {
+        (0,core.debug)('Skipping: see previous logs for more information');
         return;
     }
-    const ghIssueNumber = github.context.issue.number;
+    const { ghIssueNumber } = prInfo;
     const comments = await getComments(ghIssueNumber);
     // Get provider from input or auto-detect
     let provider = (0,core.getInput)('provider');
@@ -31974,7 +32006,12 @@ async function main() {
     (0,core.info)(JSON.stringify(previewData));
     (0,core.info)(JSON.stringify(linearIdentifier));
     const issue = await getLinearIssueId(linearIdentifier);
-    const title = github.context.payload.issue?.title;
+    // Fetch PR title if not already available (for deployment_status events)
+    let title = prInfo.title;
+    if (!title) {
+        const pr = await getPullRequest(ghIssueNumber);
+        title = pr.title;
+    }
     const attachment = await setAttachment({
         issueId: issue.id,
         url: previewData.url,

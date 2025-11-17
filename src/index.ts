@@ -1,22 +1,21 @@
 import { context } from '@actions/github';
 import { debug, getInput, info } from '@actions/core';
 
-import { findLinearIdentifierInComment, getComments } from './github';
+import { findLinearIdentifierInComment, getComments, getPullRequest, getPullRequestInfoFromEvent } from './github';
 import { getLinearIssueId, setAttachment } from './linear';
 import { getPreviewDataByProvider, supportedProviders, detectProvider } from './providers';
 
 async function main() {
     debug(`Starting with context: ${JSON.stringify(context, null, 2)}`);
 
-    // Only run if the comment is on a pull request
-    if (!context.payload.issue?.pull_request) {
-        // TODO: What about listening on deployment_status then? Can we expand this check to be
-        // "if on:issue_comment" + "no payload.pull_request"?
-        info('Skipping: comment is not on a pull request');
+    const prInfo = getPullRequestInfoFromEvent();
+    if (!prInfo) {
+        // Skipping due to various reasons, see logs for details
         return;
     }
 
-    const ghIssueNumber = context.issue.number;
+    const { ghIssueNumber } = prInfo;
+
     const comments = await getComments(ghIssueNumber);
 
     // Get provider from input or auto-detect
@@ -54,7 +53,12 @@ async function main() {
     info(JSON.stringify(linearIdentifier));
     const issue = await getLinearIssueId(linearIdentifier);
 
-    const title = context.payload.issue?.title;
+    // Fetch PR title if not already available (for deployment_status events)
+    let title = prInfo.title;
+    if (!title) {
+        const pr = await getPullRequest(ghIssueNumber);
+        title = pr.title;
+    }
 
     const attachment = await setAttachment({
         issueId: issue.id,

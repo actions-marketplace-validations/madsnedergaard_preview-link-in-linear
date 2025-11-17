@@ -1,13 +1,46 @@
 import { getOctokit, context } from '@actions/github';
-import { getInput, debug } from '@actions/core';
+import { getInput, debug, info } from '@actions/core';
+
+export interface PullRequestInfo {
+    ghIssueNumber: number;
+    title: string | undefined;
+}
+
+export function getPullRequestInfoFromEvent(): PullRequestInfo | null {
+    // Handle different event types
+    if (context.eventName === 'issue_comment') {
+        // Only run if the comment is on a pull request (ignore issue comments)
+        if (!context.payload.issue?.pull_request) {
+            info('Skipping: comment is not on a pull request');
+            return null;
+        }
+        return {
+            ghIssueNumber: context.issue.number,
+            title: context.payload.issue?.title,
+        };
+    } else if (context.eventName === 'deployment_status') {
+        // Extract PR number from deployment payload
+        const pullRequests = context.payload.deployment?.pull_requests;
+        if (!pullRequests || pullRequests.length === 0) {
+            info('Skipping: deployment is not associated with a pull request');
+            return null;
+        }
+        return {
+            ghIssueNumber: pullRequests[0].number,
+            title: undefined, // Title will be fetched later if needed
+        };
+    } else {
+        info(`Skipping: unsupported event type ${context.eventName}`);
+        return null;
+    }
+}
 
 async function getClient() {
     const API_TOKEN = getInput('GITHUB_TOKEN', { required: true });
     return getOctokit(API_TOKEN);
 }
 
-export async function getGitSha(ghIssueNumber: number) {
-    debug(`Getting git ref for issue number: ${ghIssueNumber}`);
+export async function getPullRequest(ghIssueNumber: number) {
     const octokit = await getClient();
     const pull = await octokit.rest.pulls.get({
         owner: context.repo.owner,
@@ -15,7 +48,13 @@ export async function getGitSha(ghIssueNumber: number) {
         pull_number: ghIssueNumber,
     });
     debug(`Pull data: ${JSON.stringify(pull.data)}`);
-    return pull.data.head.sha;
+    return pull.data;
+}
+
+export async function getGitSha(ghIssueNumber: number) {
+    debug(`Getting git ref for issue number: ${ghIssueNumber}`);
+    const pull = await getPullRequest(ghIssueNumber);
+    return pull.head.sha;
 }
 
 export async function getDeployment(ref: string) {
