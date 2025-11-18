@@ -73,11 +73,14 @@ export async function getDeployment(ref: string) {
     debug(`Deployments: ${JSON.stringify(deployments.data, null, 2)}`);
     const deployment = deployments.data[0];
     if (!deployment) {
-        console.error('No deployment found for the ref');
+        console.error(`No deployment found for the ref: ${ref}`);
         return null;
     }
     if (deployments.data.length > 1) {
-        console.error('Multiple deployments found for the same ref');
+        console.error(
+            `Multiple deployments found for the same ref: ${ref}`,
+            deployments.data.map((d) => d.id),
+        );
         return null;
     }
     return deployment;
@@ -98,7 +101,7 @@ export async function getGitHubDeploymentData(ghIssueNumber: number) {
         deployment = await getDeployment(branchName);
     }
     if (!deployment) {
-        console.error(`No deployment found for ${gitSha} (SHA) or ${branchName} (branch name)`);
+        console.error(`No usable deployment found for ${gitSha} (SHA) or ${branchName} (branch name)`);
         return null;
     }
 
