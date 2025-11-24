@@ -36,7 +36,7 @@ jobs:
 
 **Linear API key**
 
-Create a new Personal API key here: https://linear.app/electricitymaps/settings/account/security
+Create a new Personal API key here: https://linear.app/{YOUR_ORGANIZATION}/settings/account/security
 
 **Provider**
 
