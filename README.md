@@ -50,7 +50,7 @@ with:
 ## How it works
 
 1. The action is triggered when a new comment is added to a pull request (as we are expecting a Linear-bot comment with a link to the Linear issue)
-2. It finds GitHub deployments or comments on the pull request
+2. It finds GitHub deployments or preview links in comments on the pull request
 3. It finds the Linear issue associated with the pull request from the comment
 4. It attaches the preview link to the Linear issue 🪄
 
