@@ -1,9 +1,9 @@
 import { context } from '@actions/github';
-import { debug, getInput, info } from '@actions/core';
+import { debug, info } from '@actions/core';
 
 import { findLinearIdentifierInComment, getComments, getPullRequest, getPullRequestInfoFromEvent } from './github';
 import { getLinearIssueId, setAttachment } from './linear';
-import { getPreviewDataByProvider, supportedProviders, detectProvider } from './providers';
+import { getPreviewDataByProvider, getProvider } from './providers';
 
 async function main() {
     debug(`Starting with context: ${JSON.stringify(context, null, 2)}`);
@@ -18,25 +18,7 @@ async function main() {
 
     const comments = await getComments(ghIssueNumber);
 
-    // Get provider from input or auto-detect
-    let provider: (typeof supportedProviders)[number] | undefined = getInput('provider') as
-        | (typeof supportedProviders)[number]
-        | undefined;
-
-    if (!provider) {
-        debug('No provider specified, attempting auto-detection...');
-        const detectedProvider = await detectProvider(comments, ghIssueNumber);
-        if (!detectedProvider) {
-            throw new Error('Could not auto-detect provider. Please specify the provider input.');
-        }
-        debug(`Auto-detected provider: ${detectedProvider}`);
-        provider = detectedProvider;
-    } else {
-        if (!supportedProviders.includes(provider)) {
-            throw new Error(`Unsupported provider: ${provider}`);
-        }
-        debug(`Using provider: ${provider}`);
-    }
+    const provider = await getProvider(comments, ghIssueNumber);
 
     const linearIdentifier = await findLinearIdentifierInComment(comments);
     if (!linearIdentifier) {
@@ -49,8 +31,6 @@ async function main() {
         return;
     }
 
-    info(JSON.stringify(previewData));
-    info(JSON.stringify(linearIdentifier));
     const issue = await getLinearIssueId(linearIdentifier);
 
     // Fetch PR title if not already available (for deployment_status events)

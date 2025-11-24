@@ -1,4 +1,4 @@
-import { debug, info } from '@actions/core';
+import { debug, getInput, info } from '@actions/core';
 import { getGitHubDeploymentData } from './github';
 
 const providers = {
@@ -17,6 +17,26 @@ const providers = {
 };
 
 export const supportedProviders = ['vercel', 'netlify', 'cloudflare', 'github-deployments', 'fly'] as const;
+
+export async function getProvider(comments: any[], ghIssueNumber: number) {
+    const inputProvider = getInput('provider') as (typeof supportedProviders)[number] | undefined;
+
+    if (inputProvider) {
+        if (!supportedProviders.includes(inputProvider)) {
+            throw new Error(`Unsupported provider: ${inputProvider}`);
+        }
+        debug(`Using provider: ${inputProvider}`);
+        return inputProvider;
+    }
+
+    debug('No provider specified, attempting auto-detection...');
+    const detectedProvider = await detectProvider(comments, ghIssueNumber);
+    if (!detectedProvider) {
+        throw new Error('Could not auto-detect provider. Please specify the provider input.');
+    }
+    debug(`Auto-detected provider: ${detectedProvider}`);
+    return detectedProvider;
+}
 
 export async function detectProvider(
     comments: any[],
