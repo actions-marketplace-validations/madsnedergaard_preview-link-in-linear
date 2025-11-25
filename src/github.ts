@@ -128,6 +128,7 @@ export async function getComments(ghIssueNumber: number) {
         repo: context.repo.repo,
         issue_number: ghIssueNumber,
     });
+    debug(`Comments: ${JSON.stringify(comments.data, null, 2)}`);
     return comments.data;
 }
 

@@ -31722,6 +31722,10 @@ var core = __nccwpck_require__(7484);
 ;// CONCATENATED MODULE: ./src/github.ts
 
 
+async function getClient() {
+    const API_TOKEN = (0,core.getInput)('GITHUB_TOKEN', { required: true });
+    return (0,github.getOctokit)(API_TOKEN);
+}
 function getPullRequestInfoFromEvent() {
     // Handle different event types
     if (github.context.eventName === 'issue_comment') {
@@ -31752,10 +31756,6 @@ function getPullRequestInfoFromEvent() {
         return null;
     }
 }
-async function getClient() {
-    const API_TOKEN = (0,core.getInput)('GITHUB_TOKEN', { required: true });
-    return (0,github.getOctokit)(API_TOKEN);
-}
 async function getPullRequest(ghIssueNumber) {
     const octokit = await getClient();
     const pull = await octokit.rest.pulls.get({
@@ -31765,12 +31765,6 @@ async function getPullRequest(ghIssueNumber) {
     });
     (0,core.debug)(`Pull data: ${JSON.stringify(pull.data)}`);
     return pull.data;
-}
-function getGitSha(pull) {
-    return pull.head.sha;
-}
-function getPullRequestBranchName(pull) {
-    return pull.head.ref;
 }
 async function getDeployment(ref) {
     const octokit = await getClient();
@@ -31797,8 +31791,8 @@ async function getDeployment(ref) {
  */
 async function getGitHubDeploymentData(ghIssueNumber) {
     const pull = await getPullRequest(ghIssueNumber);
-    const gitSha = getGitSha(pull);
-    const branchName = getPullRequestBranchName(pull);
+    const gitSha = pull.head.sha;
+    const branchName = pull.head.ref;
     let deployment = null;
     // First try to get the deployment by SHA
     deployment = await getDeployment(gitSha);
@@ -31839,13 +31833,12 @@ async function getComments(ghIssueNumber) {
         repo: github.context.repo.repo,
         issue_number: ghIssueNumber,
     });
+    (0,core.debug)(`Comments: ${JSON.stringify(comments.data, null, 2)}`);
     return comments.data;
 }
 async function findLinearIdentifierInComment(comments) {
-    // Find the relevant Linear issue comment inside the pull request from the bot
     for (const comment of comments) {
         if (comment.user?.login === 'linear[bot]') {
-            // Body example: <p><a href=\"https://linear.app/preview-test/issue/PRE-7/add-functionality-for-detecting-a-linear-identifier\">PRE-7 Add functionality for detecting a Linear identifier</a></p>
             const link = comment.body?.match(/https:\/\/linear\.app\/[^"]+/)?.[0];
             if (link) {
                 const parts = link.replace('https://linear.app/', '').split('/');
@@ -31900,78 +31893,7 @@ async function setAttachment({ issueId, url, title, subtitle, avatar }) {
     }
 }
 
-;// CONCATENATED MODULE: ./src/providers.ts
-
-
-const providers = {
-    netlify: {
-        author: 'netlify[bot]',
-        urlPattern: 'Deploy Preview.*?\\]\\((https://[^)]+\\.netlify\\.app)\\)',
-    },
-    cloudflare: {
-        author: 'cloudflare-workers-and-pages[bot]',
-        urlPattern: "Branch Preview URL[\\s\\S]*?href='(https://[^']+\\.pages\\.dev)'",
-    },
-    vercel: {
-        author: 'vercel[bot]',
-        urlPattern: '\\[Preview\\]\\((https://[^)]+\\.vercel\\.app)\\)',
-    },
-};
-const supportedProviders = ['vercel', 'netlify', 'cloudflare', 'github-deployments', 'fly'];
-async function detectProvider(comments, ghIssueNumber) {
-    // Check comment-based providers first (most reliable)
-    for (const comment of comments) {
-        const author = comment.user?.login;
-        if (author === 'netlify[bot]') {
-            return 'netlify';
-        }
-        if (author === 'cloudflare-workers-and-pages[bot]') {
-            return 'cloudflare';
-        }
-        if (author === 'vercel[bot]') {
-            return 'vercel';
-        }
-    }
-    // Check GitHub deployments (covers vercel, github-deployments, and fly)
-    const deploymentData = await getGitHubDeploymentData(ghIssueNumber);
-    if (deploymentData) {
-        (0,core.debug)('Auto-detected provider: github-deployments (from GitHub deployment API)');
-        return 'github-deployments';
-    }
-    return null;
-}
-async function getPreviewDataByProvider(provider, ghIssueNumber, comments) {
-    if (['github-deployments', 'vercel', 'fly'].includes(provider)) {
-        return await getGitHubDeploymentData(ghIssueNumber);
-    }
-    if (provider === 'netlify') {
-        return await getPreviewDataFromComments(comments, provider);
-    }
-    if (provider === 'cloudflare') {
-        return await getPreviewDataFromComments(comments, provider);
-    }
-    return null;
-}
-async function getPreviewDataFromComments(comments, provider) {
-    for (const comment of comments) {
-        if (comment.user?.login === providers[provider].author) {
-            const link = comment.body?.match(new RegExp(providers[provider].urlPattern))?.[1];
-            (0,core.info)(`Found ${provider} preview link: ${link}`);
-            if (link) {
-                return { url: link, avatar: comment.user?.avatar_url };
-            }
-            else {
-                console.error(`No ${provider} link found in the comment`);
-                return null;
-            }
-        }
-    }
-    console.error(`No ${provider} link found in the comments`);
-    return null;
-}
-
 ;// CONCATENATED MODULE: ./src/index.ts
-
 
 
 
@@ -31985,37 +31907,18 @@ async function main() {
     }
     const { ghIssueNumber } = prInfo;
     const comments = await getComments(ghIssueNumber);
-    // Get provider from input or auto-detect
-    let provider = (0,core.getInput)('provider');
-    if (!provider) {
-        (0,core.debug)('No provider specified, attempting auto-detection...');
-        const detectedProvider = await detectProvider(comments, ghIssueNumber);
-        if (!detectedProvider) {
-            throw new Error('Could not auto-detect provider. Please specify the provider input.');
-        }
-        (0,core.debug)(`Auto-detected provider: ${detectedProvider}`);
-        provider = detectedProvider;
-    }
-    else {
-        if (!supportedProviders.includes(provider)) {
-            throw new Error(`Unsupported provider: ${provider}`);
-        }
-        (0,core.debug)(`Using provider: ${provider}`);
-    }
     const linearIdentifier = await findLinearIdentifierInComment(comments);
     if (!linearIdentifier) {
         (0,core.info)('Skipping: linear identifier not found');
         return;
     }
-    const previewData = await getPreviewDataByProvider(provider, ghIssueNumber, comments);
+    const previewData = await getGitHubDeploymentData(ghIssueNumber);
     if (!previewData) {
         (0,core.info)('Skipping: preview data not found');
         return;
     }
-    (0,core.info)(JSON.stringify(previewData));
-    (0,core.info)(JSON.stringify(linearIdentifier));
     const issue = await getLinearIssueId(linearIdentifier);
-    // Fetch PR title if not already available (for deployment_status events)
+    // Fetch PR title if not already available
     let title = prInfo.title;
     if (!title) {
         const pr = await getPullRequest(ghIssueNumber);
@@ -32024,7 +31927,7 @@ async function main() {
     const attachment = await setAttachment({
         issueId: issue.id,
         url: previewData.url,
-        title: `Preview of PR #${ghIssueNumber}`,
+        title: (0,core.getInput)('title') || `Preview of PR #${ghIssueNumber}`,
         subtitle: title,
         avatar: previewData.avatar,
     });
