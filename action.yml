@@ -1,7 +1,7 @@
-name: Preview in Linear
+name: GitHub Deployments links in Linear
 author: 'Mads Nedergaard <nedergaardmads@gmail.com>'
 description: >
-    Make it easy to access your preview environments in Linear with this GitHub Action.
+    Make it easy to access your GitHub Deployments links in Linear.
 
 runs:
     using: 'node20'
@@ -12,9 +12,6 @@ branding:
     color: 'green'
 
 inputs:
-    provider:
-        description: 'Provider to use for the preview environment (vercel, netlify, cloudflare, github-deployments, fly). If not provided, will be auto-detected.'
-        required: false
     GITHUB_TOKEN:
         description: 'GitHub access token with Repo scope'
         required: true
@@ -22,3 +19,7 @@ inputs:
     LINEAR_API_KEY:
         description: 'Linear API key'
         required: true
+    title:
+        description: 'Title to use for the preview link'
+        required: false
+        default: 'Preview of PR #${{ github.event.issue.number }}'
